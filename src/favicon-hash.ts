@@ -13,6 +13,7 @@
 // pivoting: the goal is repeatability, not uniqueness.
 import { definePlugin } from './sdk';
 import type { HostContext, RunResult, GraphNode } from './sdk';
+import { findExisting } from './dedup';
 
 // ---- MurmurHash3 x86 32-bit (pure JS, no deps) ----
 function murmur3_32(key: Uint8Array, seed: number = 0): number {
@@ -162,20 +163,33 @@ export const faviconHash = definePlugin({
         const signed = shodanForm(hash);
         ctx.progress?.set?.({ percent: 80, message: 'Creating favicon_hash node…' });
 
-        const node = await ctx.graph!.createNode!({
-            type: 'web.favicon_hash',
-            data: {
-                hash_value: String(signed),
-                hash_algorithm: 'mmh3',
+        // De-dup by hand: host createNode's identity check only runs when the type pack
+        // is installed in the project, so without this every run adds a fresh node for
+        // the same favicon. Reuse the existing node and just re-link the seed to it.
+        const existing = await findExisting(ctx, 'web.favicon_hash', 'hash_value', String(signed));
+        let node: GraphNode;
+        if (existing) {
+            node = existing;
+            await ctx.graph!.updateNode!(String(existing.id), {
                 favicon_url: target,
                 observed_at: new Date().toISOString(),
-            },
-        });
+            });
+        } else {
+            node = await ctx.graph!.createNode!({
+                type: 'web.favicon_hash',
+                data: {
+                    hash_value: String(signed),
+                    hash_algorithm: 'mmh3',
+                    favicon_url: target,
+                    observed_at: new Date().toISOString(),
+                },
+            });
+        }
         await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has favicon' });
 
         return {
-            summary: `Favicon hash ${signed} (${bytes.length} bytes)`,
-            counts: { created: 1 },
+            summary: `Favicon hash ${signed} (${bytes.length} bytes)${existing ? ' — reused existing node' : ''}`,
+            counts: { created: existing ? 0 : 1, reused: existing ? 1 : 0 },
         };
     },
 });

@@ -13,6 +13,7 @@
 // template clustering, no DOM parser dependency.
 import { definePlugin } from './sdk';
 import type { HostContext, RunResult, GraphNode } from './sdk';
+import { findExisting } from './dedup';
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024; // cap the fetched page
 
@@ -127,19 +128,30 @@ export const domHash = definePlugin({
         const hash = full.slice(0, 32); // dom-hash truncates to 32 hex chars
 
         ctx.progress?.set?.({ percent: 80, message: 'Creating dom_hash node…' });
-        const node = await ctx.graph!.createNode!({
-            type: 'web.dom_hash',
-            data: {
-                hash_value: hash,
+        // De-dup by hand: host createNode's identity check needs the type pack installed.
+        const existing = await findExisting(ctx, 'web.dom_hash', 'hash_value', hash);
+        let node: GraphNode;
+        if (existing) {
+            node = existing;
+            await ctx.graph!.updateNode!(String(existing.id), {
                 tag_count: tags.length,
                 observed_at: new Date().toISOString(),
-            },
-        });
+            });
+        } else {
+            node = await ctx.graph!.createNode!({
+                type: 'web.dom_hash',
+                data: {
+                    hash_value: hash,
+                    tag_count: tags.length,
+                    observed_at: new Date().toISOString(),
+                },
+            });
+        }
         await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has dom hash' });
 
         return {
-            summary: `DOM hash ${hash} (${tags.length} tags)`,
-            counts: { created: 1 },
+            summary: `DOM hash ${hash} (${tags.length} tags)${existing ? ' — reused existing node' : ''}`,
+            counts: { created: existing ? 0 : 1, reused: existing ? 1 : 0 },
         };
     },
 });

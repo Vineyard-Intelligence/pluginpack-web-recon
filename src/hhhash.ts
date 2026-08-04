@@ -12,6 +12,7 @@
 // IPs and certificates all differ.
 import { definePlugin } from './sdk';
 import type { HostContext, RunResult, GraphNode } from './sdk';
+import { findExisting } from './dedup';
 
 const MAX_HEADER_BYTES = 64 * 1024; // headers are small; this is generous
 
@@ -124,20 +125,33 @@ export const hhhash = definePlugin({
         const serverHint = (res.headers ?? {})['server'] ?? '';
 
         ctx.progress?.set?.({ percent: 80, message: 'Creating hhhash node…' });
-        const node = await ctx.graph!.createNode!({
-            type: 'web.hhhash',
-            data: {
-                hash_value: hash,
-                header_count: canonical.split('|').filter(Boolean).length,
+        const headerCount = canonical.split('|').filter(Boolean).length;
+        // De-dup by hand: host createNode's identity check needs the type pack installed.
+        const existing = await findExisting(ctx, 'web.hhhash', 'hash_value', hash);
+        let node: GraphNode;
+        if (existing) {
+            node = existing;
+            await ctx.graph!.updateNode!(String(existing.id), {
+                header_count: headerCount,
                 server_hint: serverHint || undefined,
                 observed_at: new Date().toISOString(),
-            },
-        });
+            });
+        } else {
+            node = await ctx.graph!.createNode!({
+                type: 'web.hhhash',
+                data: {
+                    hash_value: hash,
+                    header_count: headerCount,
+                    server_hint: serverHint || undefined,
+                    observed_at: new Date().toISOString(),
+                },
+            });
+        }
         await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has header hash' });
 
         return {
-            summary: `HHHash ${hash.slice(0, 12)}… (${canonical.split('|').filter(Boolean).length} headers)`,
-            counts: { created: 1 },
+            summary: `HHHash ${hash.slice(0, 12)}… (${headerCount} headers)${existing ? ' — reused existing node' : ''}`,
+            counts: { created: existing ? 0 : 1, reused: existing ? 1 : 0 },
         };
     },
 });
