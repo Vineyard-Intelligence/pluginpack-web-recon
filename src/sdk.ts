@@ -1,5 +1,5 @@
 // @vineyard/plugin-sdk (in-app runtime copy).
-// Canonical spec: marketplace/SPEC.md + marketplace/sdk/types.ts.
+// Canonical spec: registry/SPEC.md (gitignored, local-only).
 //
 // A plugin is `export default definePlugin({ manifest, run })`. It only ever touches the
 // host through `ctx` (the HostContext) — never fetch/DOM/token directly. A ctx member is
