@@ -60,9 +60,9 @@ export const hhhash = definePlugin({
         identifier: 'run.vineyard.plugins.hhhash',
         content_type: 'vineyard:plugin',
         name: 'HTTP Header Hash (HHHash)',
-        version: '1.0.0',
+        version: '1.1.0',
         description:
-            'Fetches the response headers of the selected URL via the desktop probe and computes their HHHash (hash of header-name structure) — a stable fingerprint of the server stack behind the host. Creates a web.hhhash node linked to the URL. Desktop only.',
+            'Fetches the response headers of each selected URL via the desktop probe and computes their HHHash (hash of header-name structure) — a stable fingerprint of the server stack behind the host. Creates a web.hhhash node linked to the URL. Desktop only.',
         icon: 'file-code',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
@@ -89,13 +89,8 @@ export const hhhash = definePlugin({
     },
 
     async run(ctx: HostContext): Promise<RunResult> {
-        const selId = ctx.input.selection[0];
-        if (!selId) return { summary: 'Select a URL node first', counts: { created: 0 } };
-        const seed = await ctx.graph!.get!(selId);
-        if (!seed) return { summary: 'Selected node not found', counts: { created: 0 } };
-        const target = urlOf(seed);
-        if (!target) return { summary: 'Selected node has no valid URL', counts: { created: 0 } };
-
+        const ids = ctx.input.selection;
+        if (!ids.length) return { summary: 'Select a URL node first', counts: { created: 0 } };
         if (!ctx.net?.probe) {
             return {
                 summary:
@@ -104,54 +99,95 @@ export const hhhash = definePlugin({
             };
         }
 
-        ctx.progress?.set?.({ percent: 20, message: `Fetching headers from ${target}` });
-        const res = await ctx.net.probe(target, { method: 'HEAD', maxBytes: 0 });
+        let created = 0;
+        let reused = 0;
+        let noUrl = 0;
+        let notFound = 0;
+        let failed = 0;
+        let lastHash = '';
+        let lastHeaderCount = 0;
+        let lastReused = false;
+        for (let i = 0; i < ids.length; i++) {
+            if (ctx.signal?.aborted) {
+                return {
+                    summary: `Cancelled after ${i}/${ids.length} node(s)`,
+                    counts: { created, reused, no_url: noUrl, not_found: notFound, failed },
+                };
+            }
+            const seed = await ctx.graph!.get!(ids[i]);
+            if (!seed) {
+                notFound++;
+                continue;
+            }
+            const target = urlOf(seed);
+            if (!target) {
+                noUrl++;
+                continue;
+            }
 
-        if (res.error || res.status === 0) {
-            return { summary: `Header fetch failed (${res.error || 'no response'})`, counts: { created: 0 } };
-        }
-        if (res.status >= 400) {
-            return { summary: `Header fetch failed: HTTP ${res.status}`, counts: { created: 0 } };
-        }
-
-        const names = Object.keys(res.headers ?? {});
-        if (names.length === 0) {
-            return { summary: 'No headers returned by the probe', counts: { created: 0 } };
-        }
-        ctx.progress?.set?.({ percent: 60, message: `Hashing ${names.length} header names…` });
-
-        const canonical = canonicalHeaderNames(res.headers ?? {});
-        const hash = await sha256Hex(canonical);
-        const serverHint = (res.headers ?? {})['server'] ?? '';
-
-        ctx.progress?.set?.({ percent: 80, message: 'Creating hhhash node…' });
-        const headerCount = canonical.split('|').filter(Boolean).length;
-        // De-dup by hand: host createNode's identity check needs the type pack installed.
-        const existing = await findExisting(ctx, 'web.hhhash', 'hash_value', hash);
-        let node: GraphNode;
-        if (existing) {
-            node = existing;
-            await ctx.graph!.updateNode!(String(existing.id), {
-                header_count: headerCount,
-                server_hint: serverHint || undefined,
-                observed_at: new Date().toISOString(),
+            ctx.progress?.set?.({
+                percent: Math.round((100 * i) / ids.length),
+                message: ids.length > 1 ? `Fetching headers from ${target} (${i + 1}/${ids.length})` : `Fetching headers from ${target}`,
             });
-        } else {
-            node = await ctx.graph!.createNode!({
-                type: 'web.hhhash',
-                data: {
-                    hash_value: hash,
+            const res = await ctx.net.probe(target, { method: 'HEAD', maxBytes: 0 });
+            if (res.error || res.status === 0 || res.status >= 400) {
+                failed++;
+                continue;
+            }
+
+            const names = Object.keys(res.headers ?? {});
+            if (names.length === 0) {
+                failed++;
+                continue;
+            }
+
+            const canonical = canonicalHeaderNames(res.headers ?? {});
+            const hash = await sha256Hex(canonical);
+            const serverHint = (res.headers ?? {})['server'] ?? '';
+            const headerCount = canonical.split('|').filter(Boolean).length;
+
+            // De-dup by hand: host createNode's identity check needs the type pack installed. A
+            // fresh lookup per iteration lets two selected sites sharing a fingerprint dedup
+            // against each other within this same run.
+            const existing = await findExisting(ctx, 'web.hhhash', 'hash_value', hash);
+            let node: GraphNode;
+            if (existing) {
+                node = existing;
+                await ctx.graph!.updateNode!(String(existing.id), {
                     header_count: headerCount,
                     server_hint: serverHint || undefined,
                     observed_at: new Date().toISOString(),
-                },
-            });
+                });
+                reused++;
+            } else {
+                node = await ctx.graph!.createNode!({
+                    type: 'web.hhhash',
+                    data: {
+                        hash_value: hash,
+                        header_count: headerCount,
+                        server_hint: serverHint || undefined,
+                        observed_at: new Date().toISOString(),
+                    },
+                });
+                created++;
+            }
+            await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has header hash' });
+            lastHash = hash;
+            lastHeaderCount = headerCount;
+            lastReused = !!existing;
         }
-        await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has header hash' });
 
+        const done = created + reused;
+        const skipped = noUrl + notFound + failed;
+        const skipNote = skipped
+            ? ` (${skipped} skipped: ${noUrl} without a URL, ${failed} fetch failure(s), ${notFound} not found)`
+            : '';
         return {
-            summary: `HHHash ${hash.slice(0, 12)}… (${headerCount} headers)${existing ? ' — reused existing node' : ''}`,
-            counts: { created: existing ? 0 : 1, reused: existing ? 1 : 0 },
+            summary:
+                done === 1
+                    ? `HHHash ${lastHash.slice(0, 12)}… (${lastHeaderCount} headers)${lastReused ? ' — reused existing node' : ''}${skipNote}`
+                    : `${done} host(s) fingerprinted (${created} new, ${reused} reused)${skipNote}`,
+            counts: { created, reused, no_url: noUrl, not_found: notFound, failed },
         };
     },
 });

@@ -63,9 +63,9 @@ export const domHash = definePlugin({
         identifier: 'run.vineyard.plugins.dom_hash',
         content_type: 'vineyard:plugin',
         name: 'DOM Structure Hash',
-        version: '1.0.0',
+        version: '1.1.0',
         description:
-            'Fetches the HTML of the selected URL via the desktop probe and hashes its tag structure (dom-hash) — a template fingerprint that clusters phishing kits and cloned storefronts regardless of text or branding changes. Creates a web.dom_hash node linked to the URL. Desktop only.',
+            'Fetches the HTML of each selected URL via the desktop probe and hashes its tag structure (dom-hash) — a template fingerprint that clusters phishing kits and cloned storefronts regardless of text or branding changes. Creates a web.dom_hash node linked to the URL. Desktop only.',
         icon: 'braces',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
@@ -92,13 +92,8 @@ export const domHash = definePlugin({
     },
 
     async run(ctx: HostContext): Promise<RunResult> {
-        const selId = ctx.input.selection[0];
-        if (!selId) return { summary: 'Select a URL node first', counts: { created: 0 } };
-        const seed = await ctx.graph!.get!(selId);
-        if (!seed) return { summary: 'Selected node not found', counts: { created: 0 } };
-        const target = urlOf(seed);
-        if (!target) return { summary: 'Selected node has no valid URL', counts: { created: 0 } };
-
+        const ids = ctx.input.selection;
+        if (!ids.length) return { summary: 'Select a URL node first', counts: { created: 0 } };
         if (!ctx.net?.probe) {
             return {
                 summary:
@@ -107,51 +102,92 @@ export const domHash = definePlugin({
             };
         }
 
-        ctx.progress?.set?.({ percent: 20, message: `Fetching HTML from ${target}` });
-        const res = await ctx.net.probe(target, { method: 'GET', maxBytes: MAX_HTML_BYTES });
+        let created = 0;
+        let reused = 0;
+        let noUrl = 0;
+        let notFound = 0;
+        let failed = 0;
+        let lastHash = '';
+        let lastTagCount = 0;
+        let lastReused = false;
+        for (let i = 0; i < ids.length; i++) {
+            if (ctx.signal?.aborted) {
+                return {
+                    summary: `Cancelled after ${i}/${ids.length} node(s)`,
+                    counts: { created, reused, no_url: noUrl, not_found: notFound, failed },
+                };
+            }
+            const seed = await ctx.graph!.get!(ids[i]);
+            if (!seed) {
+                notFound++;
+                continue;
+            }
+            const target = urlOf(seed);
+            if (!target) {
+                noUrl++;
+                continue;
+            }
 
-        if (res.error || res.status === 0) {
-            return { summary: `HTML fetch failed (${res.error || 'no response'})`, counts: { created: 0 } };
-        }
-        if (res.status >= 400) {
-            return { summary: `HTML fetch failed: HTTP ${res.status}`, counts: { created: 0 } };
-        }
-
-        const tags = tagSequence(res.body ?? '');
-        if (tags.length === 0) {
-            return { summary: 'No tags found in the response body', counts: { created: 0 } };
-        }
-        ctx.progress?.set?.({ percent: 60, message: `Hashing ${tags.length} tags…` });
-
-        const canonical = tags.join('|');
-        const full = await sha256Hex(canonical);
-        const hash = full.slice(0, 32); // dom-hash truncates to 32 hex chars
-
-        ctx.progress?.set?.({ percent: 80, message: 'Creating dom_hash node…' });
-        // De-dup by hand: host createNode's identity check needs the type pack installed.
-        const existing = await findExisting(ctx, 'web.dom_hash', 'hash_value', hash);
-        let node: GraphNode;
-        if (existing) {
-            node = existing;
-            await ctx.graph!.updateNode!(String(existing.id), {
-                tag_count: tags.length,
-                observed_at: new Date().toISOString(),
+            ctx.progress?.set?.({
+                percent: Math.round((100 * i) / ids.length),
+                message: ids.length > 1 ? `Fetching HTML from ${target} (${i + 1}/${ids.length})` : `Fetching HTML from ${target}`,
             });
-        } else {
-            node = await ctx.graph!.createNode!({
-                type: 'web.dom_hash',
-                data: {
-                    hash_value: hash,
+            const res = await ctx.net.probe(target, { method: 'GET', maxBytes: MAX_HTML_BYTES });
+            if (res.error || res.status === 0 || res.status >= 400) {
+                failed++;
+                continue;
+            }
+
+            const tags = tagSequence(res.body ?? '');
+            if (tags.length === 0) {
+                failed++;
+                continue;
+            }
+
+            const canonical = tags.join('|');
+            const full = await sha256Hex(canonical);
+            const hash = full.slice(0, 32); // dom-hash truncates to 32 hex chars
+
+            // De-dup by hand: host createNode's identity check needs the type pack installed. A
+            // fresh lookup per iteration lets two selected sites sharing a template dedup against
+            // each other within this same run.
+            const existing = await findExisting(ctx, 'web.dom_hash', 'hash_value', hash);
+            let node: GraphNode;
+            if (existing) {
+                node = existing;
+                await ctx.graph!.updateNode!(String(existing.id), {
                     tag_count: tags.length,
                     observed_at: new Date().toISOString(),
-                },
-            });
+                });
+                reused++;
+            } else {
+                node = await ctx.graph!.createNode!({
+                    type: 'web.dom_hash',
+                    data: {
+                        hash_value: hash,
+                        tag_count: tags.length,
+                        observed_at: new Date().toISOString(),
+                    },
+                });
+                created++;
+            }
+            await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has dom hash' });
+            lastHash = hash;
+            lastTagCount = tags.length;
+            lastReused = !!existing;
         }
-        await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has dom hash' });
 
+        const done = created + reused;
+        const skipped = noUrl + notFound + failed;
+        const skipNote = skipped
+            ? ` (${skipped} skipped: ${noUrl} without a URL, ${failed} fetch failure(s), ${notFound} not found)`
+            : '';
         return {
-            summary: `DOM hash ${hash} (${tags.length} tags)${existing ? ' — reused existing node' : ''}`,
-            counts: { created: existing ? 0 : 1, reused: existing ? 1 : 0 },
+            summary:
+                done === 1
+                    ? `DOM hash ${lastHash} (${lastTagCount} tags)${lastReused ? ' — reused existing node' : ''}${skipNote}`
+                    : `${done} page(s) fingerprinted (${created} new, ${reused} reused)${skipNote}`,
+            counts: { created, reused, no_url: noUrl, not_found: notFound, failed },
         };
     },
 });
