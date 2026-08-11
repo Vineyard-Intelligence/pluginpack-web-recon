@@ -2,8 +2,8 @@
   "identifier": "run.vineyard.pluginpacks.web_recon",
   "content_type": "vineyard:pluginpack",
   "name": "Web Recon",
-  "version": "1.0.0",
-  "description": "Web page fingerprinting for Vineyard: favicon hash (MMH3), HTTP header hash (HHHash), and DOM structure hash (dom-hash) — reusable pivot primitives for clustering related infrastructure. Desktop only.",
+  "version": "1.1.0",
+  "description": "Web page fingerprinting for Vineyard: favicon hash (MMH3), HTTP header hash (HHHash), and DOM structure hash (dom-hash) — reusable pivot primitives for clustering related infrastructure. Runs the whole selection in one pass. Desktop only.",
   "author": {
     "name": "VINEYARD",
     "url": "https://vineyard.run"
@@ -25,7 +25,7 @@
   "distribution": {
     "kind": "git",
     "repository": "https://github.com/Vineyard-Intelligence/pluginpack-web-recon",
-    "ref": "v1.0.0",
+    "ref": "v1.1.0",
     "path": "plugins/web-recon.manifest.json"
   },
   "plugins": [
@@ -33,8 +33,8 @@
       "identifier": "run.vineyard.plugins.favicon_hash",
       "content_type": "vineyard:plugin",
       "name": "Favicon Hash",
-      "version": "1.0.0",
-      "description": "Fetches the favicon of the selected URL via the desktop probe (no CORS needed), computes its MurmurHash3 hash, and creates a web.favicon_hash node linked to it. Reused favicons are a durable pivot between phishing kits, scam portals and darknet storefronts. Desktop only.",
+      "version": "1.1.0",
+      "description": "Fetches the favicon of each selected URL via the desktop probe (no CORS needed), computes its MurmurHash3 hash, and creates a web.favicon_hash node linked to it. Reused favicons are a durable pivot between phishing kits, scam portals and darknet storefronts. Desktop only.",
       "icon": "image",
       "platforms": {
         "primary": "desktop",
@@ -87,8 +87,8 @@
       "identifier": "run.vineyard.plugins.hhhash",
       "content_type": "vineyard:plugin",
       "name": "HTTP Header Hash (HHHash)",
-      "version": "1.0.0",
-      "description": "Fetches the response headers of the selected URL via the desktop probe and computes their HHHash (hash of header-name structure) — a stable fingerprint of the server stack behind the host. Creates a web.hhhash node linked to the URL. Desktop only.",
+      "version": "1.1.0",
+      "description": "Fetches the response headers of each selected URL via the desktop probe and computes their HHHash (hash of header-name structure) — a stable fingerprint of the server stack behind the host. Creates a web.hhhash node linked to the URL. Desktop only.",
       "icon": "file-code",
       "platforms": {
         "primary": "desktop",
@@ -141,8 +141,8 @@
       "identifier": "run.vineyard.plugins.dom_hash",
       "content_type": "vineyard:plugin",
       "name": "DOM Structure Hash",
-      "version": "1.0.0",
-      "description": "Fetches the HTML of the selected URL via the desktop probe and hashes its tag structure (dom-hash) — a template fingerprint that clusters phishing kits and cloned storefronts regardless of text or branding changes. Creates a web.dom_hash node linked to the URL. Desktop only.",
+      "version": "1.1.0",
+      "description": "Fetches the HTML of each selected URL via the desktop probe and hashes its tag structure (dom-hash) — a template fingerprint that clusters phishing kits and cloned storefronts regardless of text or branding changes. Creates a web.dom_hash node linked to the URL. Desktop only.",
       "icon": "braces",
       "platforms": {
         "primary": "desktop",

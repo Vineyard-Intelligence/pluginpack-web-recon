@@ -17,8 +17,8 @@ export default definePluginPack({
     identifier: 'run.vineyard.pluginpacks.web_recon',
     content_type: 'vineyard:pluginpack',
     name: 'Web Recon',
-    version: '1.0.0',
+    version: '1.1.0',
     description:
-        'Web page fingerprinting for Vineyard: favicon hash (MMH3), HTTP header hash (HHHash), and DOM structure hash (dom-hash) — reusable pivot primitives for clustering related infrastructure. Desktop only.',
+        'Web page fingerprinting for Vineyard: favicon hash (MMH3), HTTP header hash (HHHash), and DOM structure hash (dom-hash) — reusable pivot primitives for clustering related infrastructure. Runs the whole selection in one pass. Desktop only.',
     plugins: [faviconHash, hhhash, domHash],
 });
