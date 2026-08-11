@@ -91,9 +91,9 @@ export const faviconHash = definePlugin({
         identifier: 'run.vineyard.plugins.favicon_hash',
         content_type: 'vineyard:plugin',
         name: 'Favicon Hash',
-        version: '1.0.0',
+        version: '1.1.0',
         description:
-            'Fetches the favicon of the selected URL via the desktop probe (no CORS needed), computes its MurmurHash3 hash, and creates a web.favicon_hash node linked to it. Reused favicons are a durable pivot between phishing kits, scam portals and darknet storefronts. Desktop only.',
+            'Fetches the favicon of each selected URL via the desktop probe (no CORS needed), computes its MurmurHash3 hash, and creates a web.favicon_hash node linked to it. Reused favicons are a durable pivot between phishing kits, scam portals and darknet storefronts. Desktop only.',
         icon: 'image',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
@@ -120,13 +120,8 @@ export const faviconHash = definePlugin({
     },
 
     async run(ctx: HostContext): Promise<RunResult> {
-        const selId = ctx.input.selection[0];
-        if (!selId) return { summary: 'Select a URL node first', counts: { created: 0 } };
-        const seed = await ctx.graph!.get!(selId);
-        if (!seed) return { summary: 'Selected node not found', counts: { created: 0 } };
-        const pageUrl = urlOf(seed);
-        if (!pageUrl) return { summary: 'Selected node has no valid URL', counts: { created: 0 } };
-
+        const ids = ctx.input.selection;
+        if (!ids.length) return { summary: 'Select a URL node first', counts: { created: 0 } };
         if (!ctx.net?.probe) {
             return {
                 summary:
@@ -135,61 +130,101 @@ export const faviconHash = definePlugin({
             };
         }
 
-        const target = faviconUrl(pageUrl);
-        ctx.progress?.set?.({ percent: 20, message: `Fetching favicon from ${target}` });
-        const res = await ctx.net.probe(target, { method: 'GET', maxBytes: MAX_FAVICON_BYTES });
+        let created = 0;
+        let reused = 0;
+        let noUrl = 0;
+        let notFound = 0;
+        let failed = 0;
+        let lastHash = '';
+        let lastBytes = 0;
+        let lastReused = false;
+        for (let i = 0; i < ids.length; i++) {
+            if (ctx.signal?.aborted) {
+                return {
+                    summary: `Cancelled after ${i}/${ids.length} node(s)`,
+                    counts: { created, reused, no_url: noUrl, not_found: notFound, failed },
+                };
+            }
+            const seed = await ctx.graph!.get!(ids[i]);
+            if (!seed) {
+                notFound++;
+                continue;
+            }
+            const pageUrl = urlOf(seed);
+            if (!pageUrl) {
+                noUrl++;
+                continue;
+            }
 
-        if (res.error || res.status === 0) {
-            return { summary: `Favicon fetch failed (${res.error || 'no response'})`, counts: { created: 0 } };
-        }
-        if (res.status === 404 || res.status === 403) {
-            return { summary: `No favicon at ${target} (HTTP ${res.status})`, counts: { created: 0 } };
-        }
-        if (res.status >= 400) {
-            return { summary: `Favicon fetch failed: HTTP ${res.status}`, counts: { created: 0 } };
-        }
-
-        // The probe returns the body as a string; favicons are binary, so decode the
-        // bytes via a UTF-8 round-trip. This preserves the exact byte values for
-        // favicons in the BMP range (all real-world .ico/.png), which is what MMH3
-        // needs to match Shodan's hash.
-        const bytes = new TextEncoder().encode(res.body);
-        if (bytes.length === 0) {
-            return { summary: 'Favicon is empty (0 bytes)', counts: { created: 0 } };
-        }
-        ctx.progress?.set?.({ percent: 60, message: `Hashing ${bytes.length} bytes…` });
-
-        const hash = murmur3_32(bytes, 0);
-        const signed = shodanForm(hash);
-        ctx.progress?.set?.({ percent: 80, message: 'Creating favicon_hash node…' });
-
-        // De-dup by hand: host createNode's identity check only runs when the type pack
-        // is installed in the project, so without this every run adds a fresh node for
-        // the same favicon. Reuse the existing node and just re-link the seed to it.
-        const existing = await findExisting(ctx, 'web.favicon_hash', 'hash_value', String(signed));
-        let node: GraphNode;
-        if (existing) {
-            node = existing;
-            await ctx.graph!.updateNode!(String(existing.id), {
-                favicon_url: target,
-                observed_at: new Date().toISOString(),
+            const target = faviconUrl(pageUrl);
+            ctx.progress?.set?.({
+                percent: Math.round((100 * i) / ids.length),
+                message: ids.length > 1 ? `Fetching favicon from ${target} (${i + 1}/${ids.length})` : `Fetching favicon from ${target}`,
             });
-        } else {
-            node = await ctx.graph!.createNode!({
-                type: 'web.favicon_hash',
-                data: {
-                    hash_value: String(signed),
-                    hash_algorithm: 'mmh3',
+            const res = await ctx.net.probe(target, { method: 'GET', maxBytes: MAX_FAVICON_BYTES });
+            // A single site's failure (no favicon, transport error) must not sink the rest of the
+            // selection — count it and move on rather than aborting the whole run.
+            if (res.error || res.status === 0 || res.status >= 400) {
+                failed++;
+                continue;
+            }
+
+            // The probe returns the body as a string; favicons are binary, so decode the
+            // bytes via a UTF-8 round-trip. This preserves the exact byte values for
+            // favicons in the BMP range (all real-world .ico/.png), which is what MMH3
+            // needs to match Shodan's hash.
+            const bytes = new TextEncoder().encode(res.body);
+            if (bytes.length === 0) {
+                failed++;
+                continue;
+            }
+
+            const hash = murmur3_32(bytes, 0);
+            const signed = shodanForm(hash);
+
+            // De-dup by hand: host createNode's identity check only runs when the type pack
+            // is installed in the project, so without this every run adds a fresh node for
+            // the same favicon. Reuse the existing node and just re-link the seed to it.
+            // A fresh lookup per iteration (not hoisted out of the loop) is what lets two
+            // selected sites sharing a favicon dedup against EACH OTHER within this same run.
+            const existing = await findExisting(ctx, 'web.favicon_hash', 'hash_value', String(signed));
+            let node: GraphNode;
+            if (existing) {
+                node = existing;
+                await ctx.graph!.updateNode!(String(existing.id), {
                     favicon_url: target,
                     observed_at: new Date().toISOString(),
-                },
-            });
+                });
+                reused++;
+            } else {
+                node = await ctx.graph!.createNode!({
+                    type: 'web.favicon_hash',
+                    data: {
+                        hash_value: String(signed),
+                        hash_algorithm: 'mmh3',
+                        favicon_url: target,
+                        observed_at: new Date().toISOString(),
+                    },
+                });
+                created++;
+            }
+            await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has favicon' });
+            lastHash = String(signed);
+            lastBytes = bytes.length;
+            lastReused = !!existing;
         }
-        await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has favicon' });
 
+        const done = created + reused;
+        const skipped = noUrl + notFound + failed;
+        const skipNote = skipped
+            ? ` (${skipped} skipped: ${noUrl} without a URL, ${failed} fetch failure(s), ${notFound} not found)`
+            : '';
         return {
-            summary: `Favicon hash ${signed} (${bytes.length} bytes)${existing ? ' — reused existing node' : ''}`,
-            counts: { created: existing ? 0 : 1, reused: existing ? 1 : 0 },
+            summary:
+                done === 1
+                    ? `Favicon hash ${lastHash} (${lastBytes} bytes)${lastReused ? ' — reused existing node' : ''}${skipNote}`
+                    : `${done} favicon(s) hashed (${created} new, ${reused} reused)${skipNote}`,
+            counts: { created, reused, no_url: noUrl, not_found: notFound, failed },
         };
     },
 });
