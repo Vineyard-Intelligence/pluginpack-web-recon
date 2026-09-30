@@ -30,9 +30,8 @@ clear-web, staging ↔ production, clone ↔ original.
 ## Desktop only
 
 All three targets are **dynamic** (the selected site) and cross-origin bodies/headers
-require CORS, which most hosts do not send. They run through `ctx.net.probe` — the
-desktop shell's anonymous, SSRF-guarded, redirect-free main-process fetch. In the web
-build the plugins say so rather than half-working.
+require CORS, which most hosts do not send. Requests are anonymous and do not follow
+redirects. In the web build the plugins say so rather than half-working.
 
 ## Layout
 
