@@ -60,9 +60,9 @@ export const hhhash = definePlugin({
         identifier: 'run.vineyard.plugins.hhhash',
         content_type: 'vineyard:plugin',
         name: 'HTTP Header Hash (HHHash)',
-        version: '1.1.0',
+        version: '1.1.1',
         description:
-            'Fetches the response headers of each selected URL via the desktop probe and computes their HHHash (hash of header-name structure) — a stable fingerprint of the server stack behind the host. Creates a web.hhhash node linked to the URL. Desktop only.',
+            'Fetches the response headers of each selected URL and creates a web.hhhash node with a SHA-256 hash of their header names in order, linked by "has header hash"; also records the header count and Server value. Does not follow redirects. Desktop only.',
         icon: 'file-code',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
