@@ -2,8 +2,8 @@
   "identifier": "run.vineyard.pluginpacks.web_recon",
   "content_type": "vineyard:pluginpack",
   "name": "Web Recon",
-  "version": "1.1.1",
-  "description": "Fingerprints web pages by hashing their favicon (MMH3), response header names and HTML tag structure. Desktop only.",
+  "version": "1.2.0",
+  "description": "Fingerprints web pages: Shodan-style favicon hash, HHHash of the response header names, and a hash of the HTML tag structure. Desktop only.",
   "author": {
     "name": "VINEYARD",
     "url": "https://vineyard.run"
@@ -25,7 +25,7 @@
   "distribution": {
     "kind": "git",
     "repository": "https://github.com/Vineyard-Intelligence/pluginpack-web-recon",
-    "ref": "v1.1.1",
+    "ref": "v1.2.0",
     "path": "plugins/web-recon.manifest.json"
   },
   "plugins": [
@@ -33,8 +33,8 @@
       "identifier": "run.vineyard.plugins.favicon_hash",
       "content_type": "vineyard:plugin",
       "name": "Favicon Hash",
-      "version": "1.1.1",
-      "description": "Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its MMH3 hash, linked by \"has favicon\". Does not follow redirects. Desktop only.",
+      "version": "1.2.0",
+      "description": "Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan, Censys and Criminal IP search by), linked by \"has favicon\". Does not follow redirects. Desktop only.",
       "icon": "image",
       "platforms": {
         "primary": "desktop",
@@ -45,7 +45,7 @@
         "desktop": {
           "runtime": "sandbox-js",
           "entry": "dist/pack.mjs",
-          "min_app_version": "0.1.0"
+          "min_app_version": "0.4.15"
         }
       },
       "io": {
@@ -71,7 +71,7 @@
           "edge:create"
         ],
         "web_probe": {
-          "purpose": "Fetch the favicon of the selected site (anonymous, SSRF-guarded, desktop only)."
+          "purpose": "Fetch the favicon of each selected site."
         }
       },
       "lifecycle": {
@@ -87,8 +87,8 @@
       "identifier": "run.vineyard.plugins.hhhash",
       "content_type": "vineyard:plugin",
       "name": "HTTP Header Hash (HHHash)",
-      "version": "1.1.1",
-      "description": "Fetches the response headers of each selected URL and creates a web.hhhash node with a SHA-256 hash of their header names in order, linked by \"has header hash\"; also records the header count and Server value. Does not follow redirects. Desktop only.",
+      "version": "1.2.0",
+      "description": "Requests each selected URL over HTTP/1.1 and creates a web.hhhash node with its HHHash (hhh:1: plus the SHA-256 of the response header names in order), linked by \"has header hash\"; also records the header count and Server value. Does not follow redirects. Desktop only.",
       "icon": "file-code",
       "platforms": {
         "primary": "desktop",
@@ -99,7 +99,7 @@
         "desktop": {
           "runtime": "sandbox-js",
           "entry": "dist/pack.mjs",
-          "min_app_version": "0.1.0"
+          "min_app_version": "0.4.15"
         }
       },
       "io": {
@@ -125,7 +125,7 @@
           "edge:create"
         ],
         "web_probe": {
-          "purpose": "Fetch the response headers of the selected site (anonymous, SSRF-guarded, desktop only)."
+          "purpose": "Fetch the response headers of each selected site."
         }
       },
       "lifecycle": {
@@ -141,7 +141,7 @@
       "identifier": "run.vineyard.plugins.dom_hash",
       "content_type": "vineyard:plugin",
       "name": "DOM Structure Hash",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "description": "Fetches the HTML of each selected URL and creates a web.dom_hash node with a hash of its HTML tag sequence, linked by \"has dom hash\". Does not follow redirects. Desktop only.",
       "icon": "braces",
       "platforms": {
@@ -179,7 +179,7 @@
           "edge:create"
         ],
         "web_probe": {
-          "purpose": "Fetch the HTML of the selected site to hash its DOM structure (anonymous, SSRF-guarded, desktop only)."
+          "purpose": "Fetch the HTML of each selected site."
         }
       },
       "lifecycle": {

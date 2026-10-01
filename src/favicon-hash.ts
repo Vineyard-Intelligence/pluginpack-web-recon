@@ -1,16 +1,11 @@
-// Favicon Hash plugin — fetches a site's favicon and computes its MurmurHash3 (MMH3)
-// hash, then creates a web.favicon_hash node linked to the source URL.
+// Favicon Hash plugin — fetches a site's /favicon.ico and computes the MMH3 hash Shodan uses
+// (http.favicon.hash; Censys and Criminal IP search the same value), then creates a web.favicon_hash
+// node linked to the source URL.
 //
-// WHY DESKTOP: the target is the SELECTED site's favicon, which is dynamic (any host
-// the analyst picks) — it cannot be a fixed `network` allowlist entry. And most hosts
-// serve favicons without CORS headers, so a browser cannot read the bytes at all. The
-// Electron shell's main-process probe (ctx.net.probe) has no same-origin policy and is
-// SSRF-guarded, so it fetches the bytes anonymously. Same pattern as whatsmyname.
-//
-// MMH3 is the de-facto standard for favicon correlation (Shodan uses it): fast, and —
-// more importantly — adversaries rarely consider favicons intelligence-relevant, so
-// they reuse them verbatim across kits and storefronts. Collisions are acceptable for
-// pivoting: the goal is repeatability, not uniqueness.
+// Shodan's value is MurmurHash3-32 of the favicon BASE64-ENCODED with a newline every 76 characters
+// and one at the end (Python's base64.encodebytes), as a signed integer — not of the raw bytes. The
+// bytes come from the desktop probe as base64 (bodyEncoding), because a UTF-8 decode of a binary
+// file is lossy. Checked against Python mmh3 on real favicons (google.com -> 708578229).
 import { definePlugin } from './sdk';
 import type { HostContext, RunResult, GraphNode } from './sdk';
 import { findExisting } from './dedup';
@@ -59,6 +54,12 @@ function shodanForm(h: number): number {
     return h > 0x7fffffff ? h - 0x100000000 : h;
 }
 
+/** Shodan's favicon hash of base64 content: MMH3 over base64 wrapped at 76 columns, trailing newline. */
+export function shodanFaviconHash(base64: string): number {
+    const wrapped = (base64.match(/.{1,76}/g) ?? []).map((line) => `${line}\n`).join('');
+    return shodanForm(murmur3_32(new TextEncoder().encode(wrapped), 0));
+}
+
 /** Extract the URL of a web.url node; null if malformed. */
 function urlOf(seed: GraphNode): string | null {
     const u = typeof seed.data?.url === 'string' ? seed.data.url : '';
@@ -91,16 +92,16 @@ export const faviconHash = definePlugin({
         identifier: 'run.vineyard.plugins.favicon_hash',
         content_type: 'vineyard:plugin',
         name: 'Favicon Hash',
-        version: '1.1.1',
+        version: '1.2.0',
         description:
-            'Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its MMH3 hash, linked by "has favicon". Does not follow redirects. Desktop only.',
+            'Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan, Censys and Criminal IP search by), linked by "has favicon". Does not follow redirects. Desktop only.',
         icon: 'image',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
         platforms: {
             primary: 'desktop',
             web: { runtime: 'sandbox-js', entry: 'inline' },
-            desktop: { runtime: 'sandbox-js', entry: 'inline', min_app_version: '0.1.0' },
+            desktop: { runtime: 'sandbox-js', entry: 'inline', min_app_version: '0.4.15' },
         },
         io: {
             consumes: [
@@ -113,7 +114,7 @@ export const faviconHash = definePlugin({
         scopes: {
             graph: ['node:read', 'node:create', 'edge:create'],
             web_probe: {
-                purpose: 'Fetch the favicon of the selected site (anonymous, SSRF-guarded, desktop only).',
+                purpose: 'Fetch the favicon of each selected site.',
             },
         },
         lifecycle: { persistence: 'opt-in', controls: ['progress', 'cancel'], progress: 'determinate' },
@@ -161,7 +162,7 @@ export const faviconHash = definePlugin({
                 percent: Math.round((100 * i) / ids.length),
                 message: ids.length > 1 ? `Fetching favicon from ${target} (${i + 1}/${ids.length})` : `Fetching favicon from ${target}`,
             });
-            const res = await ctx.net.probe(target, { method: 'GET', maxBytes: MAX_FAVICON_BYTES });
+            const res = await ctx.net.probe(target, { method: 'GET', maxBytes: MAX_FAVICON_BYTES, bodyEncoding: 'base64' });
             // A single site's failure (no favicon, transport error) must not sink the rest of the
             // selection — count it and move on rather than aborting the whole run.
             if (res.error || res.status === 0 || res.status >= 400) {
@@ -169,18 +170,18 @@ export const faviconHash = definePlugin({
                 continue;
             }
 
-            // The probe returns the body as a string; favicons are binary, so decode the
-            // bytes via a UTF-8 round-trip. This preserves the exact byte values for
-            // favicons in the BMP range (all real-world .ico/.png), which is what MMH3
-            // needs to match Shodan's hash.
-            const bytes = new TextEncoder().encode(res.body);
-            if (bytes.length === 0) {
+            // An app from before bodyEncoding returns the bytes UTF-8-decoded, which cannot give the
+            // right hash; stop rather than store a wrong one.
+            if (res.bodyEncoding !== 'base64') {
+                throw new Error('Favicon Hash needs Vineyard desktop 0.4.15 or later — update the app.');
+            }
+            if (!res.body || res.truncated) {
                 failed++;
                 continue;
             }
 
-            const hash = murmur3_32(bytes, 0);
-            const signed = shodanForm(hash);
+            const signed = shodanFaviconHash(res.body);
+            const byteCount = Math.floor((res.body.length * 3) / 4) - (res.body.match(/=+$/)?.[0].length ?? 0);
 
             // De-dup by hand: host createNode's identity check only runs when the type pack
             // is installed in the project, so without this every run adds a fresh node for
@@ -210,7 +211,7 @@ export const faviconHash = definePlugin({
             }
             await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has favicon' });
             lastHash = String(signed);
-            lastBytes = bytes.length;
+            lastBytes = byteCount;
             lastReused = !!existing;
         }
 
