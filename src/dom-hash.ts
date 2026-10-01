@@ -63,9 +63,9 @@ export const domHash = definePlugin({
         identifier: 'run.vineyard.plugins.dom_hash',
         content_type: 'vineyard:plugin',
         name: 'DOM Structure Hash',
-        version: '1.1.0',
+        version: '1.1.1',
         description:
-            'Fetches the HTML of each selected URL via the desktop probe and hashes its tag structure (dom-hash) — a template fingerprint that clusters phishing kits and cloned storefronts regardless of text or branding changes. Creates a web.dom_hash node linked to the URL. Desktop only.',
+            'Fetches the HTML of each selected URL and creates a web.dom_hash node with a hash of its HTML tag sequence, linked by "has dom hash". Does not follow redirects. Desktop only.',
         icon: 'braces',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',

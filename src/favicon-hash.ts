@@ -91,9 +91,9 @@ export const faviconHash = definePlugin({
         identifier: 'run.vineyard.plugins.favicon_hash',
         content_type: 'vineyard:plugin',
         name: 'Favicon Hash',
-        version: '1.1.0',
+        version: '1.1.1',
         description:
-            'Fetches the favicon of each selected URL via the desktop probe (no CORS needed), computes its MurmurHash3 hash, and creates a web.favicon_hash node linked to it. Reused favicons are a durable pivot between phishing kits, scam portals and darknet storefronts. Desktop only.',
+            'Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its MMH3 hash, linked by "has favicon". Does not follow redirects. Desktop only.',
         icon: 'image',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
