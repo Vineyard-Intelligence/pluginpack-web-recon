@@ -63,7 +63,7 @@ export const domHash = definePlugin({
         identifier: 'run.vineyard.plugins.dom_hash',
         content_type: 'vineyard:plugin',
         name: 'DOM Structure Hash',
-        version: '1.1.1',
+        version: '1.2.0',
         description:
             'Fetches the HTML of each selected URL and creates a web.dom_hash node with a hash of its HTML tag sequence, linked by "has dom hash". Does not follow redirects. Desktop only.',
         icon: 'braces',
@@ -85,7 +85,7 @@ export const domHash = definePlugin({
         scopes: {
             graph: ['node:read', 'node:create', 'edge:create'],
             web_probe: {
-                purpose: 'Fetch the HTML of the selected site to hash its DOM structure (anonymous, SSRF-guarded, desktop only).',
+                purpose: 'Fetch the HTML of each selected site.',
             },
         },
         lifecycle: { persistence: 'opt-in', controls: ['progress', 'cancel'], progress: 'determinate' },

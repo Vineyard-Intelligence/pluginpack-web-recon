@@ -1,15 +1,11 @@
-// HHHash plugin — HTTP Header Hashing: fingerprints a server by the STRUCTURE of its
-// HTTP/1 response headers (which headers, in which order), ignoring volatile values.
+// HHHash plugin — HTTP Header Hashing (https://github.com/adulau/HHHash): "hhh:1:" + SHA-256 of
+// the response header NAMES in the order the server sent them, joined with ':'.
 //
-// WHY DESKTOP: the target is dynamic (the selected site), and reading response headers
-// cross-origin requires CORS — which most hosts do not send. ctx.net.probe runs in the
-// Electron main process and returns the response headers, no CORS needed.
-//
-// The hash covers header NAMES in ORDER (lowercased, first-occurrence de-duplicated),
-// following the HHHash technique (https://www.foo.be/2023/07/HTTP-Headers-Hashing_HHHash):
-// the same server stack / reverse-proxy / framework config produces the same hash, so
-// clusters of hosts sharing an HHHash share deployment practice — even when domains,
-// IPs and certificates all differ.
+// Computed the way the reference implementation (the `hhhash` Python package, buildhash) does, so the
+// values compare with other tools': an HTTP/1.1 GET (HTTP/2 lowercases names), without following
+// redirects, sending the request headers that client sends, with repeated names (Set-Cookie…)
+// counted once at their first position — and in their original case. Checked against the package
+// on live sites, including the values its README publishes.
 import { definePlugin } from './sdk';
 import type { HostContext, RunResult, GraphNode } from './sdk';
 import { findExisting } from './dedup';
@@ -28,23 +24,16 @@ function urlOf(seed: GraphNode): string | null {
     }
 }
 
-/**
- * Build the HHHash canonical string: header names in response order, lowercased,
- * first occurrence only (probe headers are already lowercased, minus set-cookie).
- * Values are intentionally excluded — they are volatile (dates, tokens).
- */
-function canonicalHeaderNames(headers: Record<string, string>): string {
-    const names: string[] = [];
+/** HHHash of header names as received: first occurrence of each (case-insensitive), joined with ':'. */
+export async function hhhashOf(names: string[]): Promise<{ value: string; count: number }> {
     const seen = new Set<string>();
-    for (const name of Object.keys(headers)) {
-        const n = name.toLowerCase().trim();
-        if (!n || seen.has(n)) continue;
-        // set-cookie is stripped by the probe; skip hop-by-hop noise defensively.
-        if (n === 'set-cookie' || n === 'connection' || n === 'keep-alive') continue;
-        seen.add(n);
-        names.push(n);
-    }
-    return names.join('|');
+    const kept = names.filter((n) => {
+        const k = n.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+    });
+    return { value: `hhh:1:${await sha256Hex(kept.join(':'))}`, count: kept.length };
 }
 
 async function sha256Hex(s: string): Promise<string> {
@@ -60,16 +49,16 @@ export const hhhash = definePlugin({
         identifier: 'run.vineyard.plugins.hhhash',
         content_type: 'vineyard:plugin',
         name: 'HTTP Header Hash (HHHash)',
-        version: '1.1.1',
+        version: '1.2.0',
         description:
-            'Fetches the response headers of each selected URL and creates a web.hhhash node with a SHA-256 hash of their header names in order, linked by "has header hash"; also records the header count and Server value. Does not follow redirects. Desktop only.',
+            'Requests each selected URL over HTTP/1.1 and creates a web.hhhash node with its HHHash (hhh:1: plus the SHA-256 of the response header names in order), linked by "has header hash"; also records the header count and Server value. Does not follow redirects. Desktop only.',
         icon: 'file-code',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
         platforms: {
             primary: 'desktop',
             web: { runtime: 'sandbox-js', entry: 'inline' },
-            desktop: { runtime: 'sandbox-js', entry: 'inline', min_app_version: '0.1.0' },
+            desktop: { runtime: 'sandbox-js', entry: 'inline', min_app_version: '0.4.15' },
         },
         io: {
             consumes: [
@@ -82,7 +71,7 @@ export const hhhash = definePlugin({
         scopes: {
             graph: ['node:read', 'node:create', 'edge:create'],
             web_probe: {
-                purpose: 'Fetch the response headers of the selected site (anonymous, SSRF-guarded, desktop only).',
+                purpose: 'Fetch the response headers of each selected site.',
             },
         },
         lifecycle: { persistence: 'opt-in', controls: ['progress', 'cancel'], progress: 'determinate' },
@@ -129,22 +118,29 @@ export const hhhash = definePlugin({
                 percent: Math.round((100 * i) / ids.length),
                 message: ids.length > 1 ? `Fetching headers from ${target} (${i + 1}/${ids.length})` : `Fetching headers from ${target}`,
             });
-            const res = await ctx.net.probe(target, { method: 'HEAD', maxBytes: 0 });
-            if (res.error || res.status === 0 || res.status >= 400) {
+            const res = await ctx.net.probe(target, {
+                method: 'GET',
+                headers: { Accept: '*/*', 'Accept-Encoding': 'gzip, deflate' },
+                headerNames: true,
+            });
+            // Any status is fingerprinted, as the reference does: a 403 or 404 still shows the stack.
+            if (res.error || res.status === 0) {
                 failed++;
                 continue;
             }
 
-            const names = Object.keys(res.headers ?? {});
-            if (names.length === 0) {
+            // An app from before headerNames answers over HTTP/2 with lowercased names; that is not
+            // the HHHash, so stop rather than store a wrong one.
+            if (!Array.isArray(res.headerNames)) {
+                throw new Error('HHHash needs Vineyard desktop 0.4.15 or later — update the app.');
+            }
+            if (!res.headerNames.length) {
                 failed++;
                 continue;
             }
 
-            const canonical = canonicalHeaderNames(res.headers ?? {});
-            const hash = await sha256Hex(canonical);
+            const { value: hash, count: headerCount } = await hhhashOf(res.headerNames);
             const serverHint = (res.headers ?? {})['server'] ?? '';
-            const headerCount = canonical.split('|').filter(Boolean).length;
 
             // De-dup by hand: host createNode's identity check needs the type pack installed. A
             // fresh lookup per iteration lets two selected sites sharing a fingerprint dedup

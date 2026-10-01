@@ -149,6 +149,8 @@ export interface SafeProbeInit {
     body?: string; // only meaningful for POST
     maxBytes?: number; // cap on the returned body; the shell clamps it to a ceiling
     timeoutMs?: number; // per-request timeout; the shell clamps it to a ceiling
+    bodyEncoding?: 'base64'; // return the body base64-encoded (binary content); desktop 0.4.15+
+    headerNames?: boolean; // HTTP/1.1, and return the header names as sent (order, case, repeats); body not read; desktop 0.4.15+
 }
 export interface SafeProbeResponse {
     /** The real HTTP status, including 3xx. 0 when the request was blocked or errored. */
@@ -158,6 +160,8 @@ export interface SafeProbeResponse {
     truncated: boolean;
     redirectUrl?: string; // Location of a 3xx (not followed)
     error?: string; // set on guard rejection or transport error; status is 0 then
+    bodyEncoding?: 'base64'; // present when the body is base64-encoded
+    headerNames?: string[]; // when requested: header names as sent
 }
 
 export interface HostContext {
