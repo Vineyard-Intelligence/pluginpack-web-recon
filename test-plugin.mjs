@@ -5,6 +5,7 @@
 //   favicon  Python `mmh3.hash(codecs.encode(data, 'base64'))` — Shodan's http.favicon.hash
 //   HHHash   the `hhhash` package (buildhash); adca8a87… is the value its README publishes for
 //            www.misp-project.org, whose header names are listed below.
+import { readFileSync } from 'node:fs';
 import pack from './dist/pack.mjs';
 
 const [favicon, hhhash] = pack.plugins;
@@ -14,24 +15,28 @@ const check = (name, cond) => {
     if (!cond) fail++;
 };
 
-function ctxWith(probeResponse) {
+// No updateNode: the plugins declare no node:update, and the host only provides it under that scope.
+function ctxWith(probeResponse, existing = []) {
     const created = [];
     const calls = [];
+    const edges = [];
     return {
         created,
         calls,
+        edges,
         ctx: {
             input: { selection: ['u1'] },
             graph: {
                 get: async () => ({ id: 'u1', type: 'web.url', data: { url: 'https://example.com/page' } }),
-                list: async () => ({ nodes: [] }),
+                list: async ({ type } = {}) => ({ nodes: existing.filter((n) => !type || n.type === type) }),
                 createNode: async (d) => {
                     const n = { id: `n${created.length + 1}`, ...d };
                     created.push(n);
                     return n;
                 },
-                updateNode: async () => {},
-                createEdge: async () => {},
+                createEdge: async (e) => {
+                    edges.push(e);
+                },
             },
             net: {
                 probe: async (url, init) => {
@@ -83,6 +88,36 @@ function ctxWith(probeResponse) {
     const t = ctxWith({ status: 200, headers: { date: 'x' }, body: '', truncated: false });
     const err = await hhhash.run(t.ctx).catch((e) => e);
     check('an app without headerNames is refused', err instanceof Error && /0\.4\.15/.test(err.message));
+}
+
+// ── a re-run on a hash already in the graph: createNode again (the host merges it into the
+//    existing node), never updateNode — which used to throw without node:update.
+{
+    const names = ['Date', 'Server'];
+    const hash = 'hhh:1:' + 'x'.repeat(64);
+    const t = ctxWith({ status: 200, headers: {}, body: '', truncated: false, headerNames: names }, []);
+    await hhhash.run(t.ctx);
+    const known = { id: 'h1', type: 'web.hhhash', data: { hash_value: t.created[0]?.data.hash_value ?? hash } };
+    const again = ctxWith({ status: 200, headers: {}, body: '', truncated: false, headerNames: names }, [known]);
+    const res = await hhhash.run(again.ctx).catch((e) => e);
+    check('a re-run on a known hash succeeds without updateNode', !(res instanceof Error));
+    check(
+        'and re-creates it by identity so the host merges it',
+        again.created[0]?.data.hash_value === known.data.hash_value && again.edges.length === 1,
+    );
+    check('the summary says the hash was already known', /reused|existing/i.test(res?.summary ?? ''));
+}
+
+// ── scopes: the app grants from the JSON manifest, so it must say what the bundle says.
+{
+    const json = JSON.parse(readFileSync(new URL('./plugins/web-recon.manifest.json', import.meta.url), 'utf8'));
+    for (const p of pack.plugins) {
+        const m = json.plugins.find((x) => x.identifier === p.manifest.identifier);
+        check(
+            `${p.manifest.identifier}: same graph scopes as the JSON manifest`,
+            JSON.stringify(m?.scopes.graph) === JSON.stringify(p.manifest.scopes.graph),
+        );
+    }
 }
 
 console.log(fail ? `\n${fail} FAILED` : '\nall checks passed');

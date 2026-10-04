@@ -1,16 +1,14 @@
-// De-dup helper for web-recon plugins.
+// Lookup helper for web-recon plugins.
 //
-// createNode in the host bridge de-duplicates by identity ONLY when the type's
-// definition is resolvable from the installed Type Packs — if the pack is not
-// installed/activated in the project, resolveType fails, identity comes back null,
-// and every run adds another copy of the same fingerprint. This helper does the
-// lookup the plugin itself can always do: scan existing nodes of the produced type
-// for one carrying the same identifying value, and reuse it.
+// The host's createNode already merges a fingerprint into the existing node with the same
+// identity, so this is not what dedups. It only answers "was this hash already in the graph?"
+// for the run summary ("reused existing node" vs "new"). It sees committed nodes, not ones this
+// run has staged.
 import type { GraphNode, HostContext } from './sdk';
 
 /**
  * Find an existing node of `type` whose data carries `value` at field `key`.
- * Returns null when none exists (the caller should createNode).
+ * Returns null when none exists.
  */
 export async function findExisting(
     ctx: HostContext,
