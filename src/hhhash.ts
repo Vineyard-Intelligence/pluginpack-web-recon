@@ -49,7 +49,7 @@ export const hhhash = definePlugin({
         identifier: 'run.vineyard.plugins.hhhash',
         content_type: 'vineyard:plugin',
         name: 'HTTP Header Hash (HHHash)',
-        version: '1.2.0',
+        version: '1.2.1',
         description:
             'Requests each selected URL over HTTP/1.1 and creates a web.hhhash node with its HHHash (hhh:1: plus the SHA-256 of the response header names in order), linked by "has header hash"; also records the header count and Server value. Does not follow redirects. Desktop only.',
         icon: 'file-code',
@@ -142,31 +142,21 @@ export const hhhash = definePlugin({
             const { value: hash, count: headerCount } = await hhhashOf(res.headerNames);
             const serverHint = (res.headers ?? {})['server'] ?? '';
 
-            // De-dup by hand: host createNode's identity check needs the type pack installed. A
-            // fresh lookup per iteration lets two selected sites sharing a fingerprint dedup
-            // against each other within this same run.
+            // createNode merges into the node that already carries this hash (the host dedups by
+            // the type's identity), so a re-run refreshes it rather than adding a copy, without
+            // node:update. The lookup only tells the summary whether the hash was already known.
             const existing = await findExisting(ctx, 'web.hhhash', 'hash_value', hash);
-            let node: GraphNode;
-            if (existing) {
-                node = existing;
-                await ctx.graph!.updateNode!(String(existing.id), {
+            const node: GraphNode = await ctx.graph!.createNode!({
+                type: 'web.hhhash',
+                data: {
+                    hash_value: hash,
                     header_count: headerCount,
                     server_hint: serverHint || undefined,
                     observed_at: new Date().toISOString(),
-                });
-                reused++;
-            } else {
-                node = await ctx.graph!.createNode!({
-                    type: 'web.hhhash',
-                    data: {
-                        hash_value: hash,
-                        header_count: headerCount,
-                        server_hint: serverHint || undefined,
-                        observed_at: new Date().toISOString(),
-                    },
-                });
-                created++;
-            }
+                },
+            });
+            if (existing) reused++;
+            else created++;
             await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has header hash' });
             lastHash = hash;
             lastHeaderCount = headerCount;

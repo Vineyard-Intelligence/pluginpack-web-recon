@@ -6,7 +6,7 @@ primitives** for clustering related infrastructure. One install, three plugins:
 | Plugin | What it does | Produces |
 |---|---|---|
 | **Favicon Hash** (`run.vineyard.plugins.favicon_hash`) | Fetches the selected URL's favicon, computes the MurmurHash3 (MMH3) hash | `web.favicon_hash` node |
-| **HTTP Header Hash** (`run.vineyard.plugins.hhhash`) | Fetches response headers (HEAD), hashes the ordered header-**name** structure (HHHash) | `web.hhhash` node |
+| **HTTP Header Hash** (`run.vineyard.plugins.hhhash`) | Requests the URL over HTTP/1.1 and hashes the ordered response header-**name** structure (HHHash) | `web.hhhash` node |
 | **DOM Structure Hash** (`run.vineyard.plugins.dom_hash`) | Fetches the HTML, hashes the ordered tag sequence (dom-hash, SHA-256 truncated to 32) | `web.dom_hash` node |
 
 Each creates its node linked to the source `web.url` (edges `has favicon` /

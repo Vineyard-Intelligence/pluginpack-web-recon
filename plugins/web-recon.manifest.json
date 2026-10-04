@@ -2,7 +2,7 @@
   "identifier": "run.vineyard.pluginpacks.web_recon",
   "content_type": "vineyard:pluginpack",
   "name": "Web Recon",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Fingerprints web pages: Shodan-style favicon hash, HHHash of the response header names, and a hash of the HTML tag structure. Desktop only.",
   "author": {
     "name": "VINEYARD",
@@ -25,7 +25,7 @@
   "distribution": {
     "kind": "git",
     "repository": "https://github.com/Vineyard-Intelligence/pluginpack-web-recon",
-    "ref": "v1.2.1",
+    "ref": "v1.2.2",
     "path": "plugins/web-recon.manifest.json"
   },
   "plugins": [
@@ -33,7 +33,7 @@
       "identifier": "run.vineyard.plugins.favicon_hash",
       "content_type": "vineyard:plugin",
       "name": "Favicon Hash",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "description": "Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan, Censys and Criminal IP search by), linked by \"has favicon\". Does not follow redirects. Desktop only.",
       "icon": "image",
       "platforms": {
@@ -87,7 +87,7 @@
       "identifier": "run.vineyard.plugins.hhhash",
       "content_type": "vineyard:plugin",
       "name": "HTTP Header Hash (HHHash)",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "description": "Requests each selected URL over HTTP/1.1 and creates a web.hhhash node with its HHHash (hhh:1: plus the SHA-256 of the response header names in order), linked by \"has header hash\"; also records the header count and Server value. Does not follow redirects. Desktop only.",
       "icon": "file-code",
       "platforms": {
@@ -141,7 +141,7 @@
       "identifier": "run.vineyard.plugins.dom_hash",
       "content_type": "vineyard:plugin",
       "name": "DOM Structure Hash",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "description": "Fetches the HTML of each selected URL and creates a web.dom_hash node with a hash of its HTML tag sequence, linked by \"has dom hash\". Does not follow redirects. Desktop only.",
       "icon": "braces",
       "platforms": {

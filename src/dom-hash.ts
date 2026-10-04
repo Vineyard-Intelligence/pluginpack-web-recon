@@ -63,7 +63,7 @@ export const domHash = definePlugin({
         identifier: 'run.vineyard.plugins.dom_hash',
         content_type: 'vineyard:plugin',
         name: 'DOM Structure Hash',
-        version: '1.2.0',
+        version: '1.2.1',
         description:
             'Fetches the HTML of each selected URL and creates a web.dom_hash node with a hash of its HTML tag sequence, linked by "has dom hash". Does not follow redirects. Desktop only.',
         icon: 'braces',
@@ -148,29 +148,20 @@ export const domHash = definePlugin({
             const full = await sha256Hex(canonical);
             const hash = full.slice(0, 32); // dom-hash truncates to 32 hex chars
 
-            // De-dup by hand: host createNode's identity check needs the type pack installed. A
-            // fresh lookup per iteration lets two selected sites sharing a template dedup against
-            // each other within this same run.
+            // createNode merges into the node that already carries this hash (the host dedups by
+            // the type's identity), so a re-run refreshes it rather than adding a copy, without
+            // node:update. The lookup only tells the summary whether the hash was already known.
             const existing = await findExisting(ctx, 'web.dom_hash', 'hash_value', hash);
-            let node: GraphNode;
-            if (existing) {
-                node = existing;
-                await ctx.graph!.updateNode!(String(existing.id), {
+            const node: GraphNode = await ctx.graph!.createNode!({
+                type: 'web.dom_hash',
+                data: {
+                    hash_value: hash,
                     tag_count: tags.length,
                     observed_at: new Date().toISOString(),
-                });
-                reused++;
-            } else {
-                node = await ctx.graph!.createNode!({
-                    type: 'web.dom_hash',
-                    data: {
-                        hash_value: hash,
-                        tag_count: tags.length,
-                        observed_at: new Date().toISOString(),
-                    },
-                });
-                created++;
-            }
+                },
+            });
+            if (existing) reused++;
+            else created++;
             await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has dom hash' });
             lastHash = hash;
             lastTagCount = tags.length;

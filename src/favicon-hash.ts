@@ -92,7 +92,7 @@ export const faviconHash = definePlugin({
         identifier: 'run.vineyard.plugins.favicon_hash',
         content_type: 'vineyard:plugin',
         name: 'Favicon Hash',
-        version: '1.2.0',
+        version: '1.2.1',
         description:
             'Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan, Censys and Criminal IP search by), linked by "has favicon". Does not follow redirects. Desktop only.',
         icon: 'image',
@@ -183,32 +183,21 @@ export const faviconHash = definePlugin({
             const signed = shodanFaviconHash(res.body);
             const byteCount = Math.floor((res.body.length * 3) / 4) - (res.body.match(/=+$/)?.[0].length ?? 0);
 
-            // De-dup by hand: host createNode's identity check only runs when the type pack
-            // is installed in the project, so without this every run adds a fresh node for
-            // the same favicon. Reuse the existing node and just re-link the seed to it.
-            // A fresh lookup per iteration (not hoisted out of the loop) is what lets two
-            // selected sites sharing a favicon dedup against EACH OTHER within this same run.
+            // createNode merges into the node that already carries this hash (the host dedups by
+            // the type's identity), so a re-run refreshes it rather than adding a copy, without
+            // node:update. The lookup only tells the summary whether the hash was already known.
             const existing = await findExisting(ctx, 'web.favicon_hash', 'hash_value', String(signed));
-            let node: GraphNode;
-            if (existing) {
-                node = existing;
-                await ctx.graph!.updateNode!(String(existing.id), {
+            const node: GraphNode = await ctx.graph!.createNode!({
+                type: 'web.favicon_hash',
+                data: {
+                    hash_value: String(signed),
+                    hash_algorithm: 'mmh3',
                     favicon_url: target,
                     observed_at: new Date().toISOString(),
-                });
-                reused++;
-            } else {
-                node = await ctx.graph!.createNode!({
-                    type: 'web.favicon_hash',
-                    data: {
-                        hash_value: String(signed),
-                        hash_algorithm: 'mmh3',
-                        favicon_url: target,
-                        observed_at: new Date().toISOString(),
-                    },
-                });
-                created++;
-            }
+                },
+            });
+            if (existing) reused++;
+            else created++;
             await ctx.graph!.createEdge!({ from: String(seed.id), to: String(node.id), label: 'has favicon' });
             lastHash = String(signed);
             lastBytes = byteCount;
