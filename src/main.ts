@@ -10,7 +10,7 @@ export default definePluginPack({
     identifier: 'run.vineyard.pluginpacks.web_recon',
     content_type: 'vineyard:pluginpack',
     name: 'Web Recon',
-    version: '1.2.2',
+    version: '1.2.3',
     description:
         'Fingerprints web pages: Shodan-style favicon hash, HHHash of the response header names, and a hash of the HTML tag structure. Desktop only.',
     plugins: [faviconHash, hhhash, domHash],

@@ -1,5 +1,5 @@
 // Favicon Hash plugin — fetches a site's /favicon.ico and computes the MMH3 hash Shodan uses
-// (http.favicon.hash; Censys and Criminal IP search the same value), then creates a web.favicon_hash
+// (http.favicon.hash; Censys searches the same value), then creates a web.favicon_hash
 // node linked to the source URL.
 //
 // Shodan's value is MurmurHash3-32 of the favicon BASE64-ENCODED with a newline every 76 characters
@@ -92,9 +92,9 @@ export const faviconHash = definePlugin({
         identifier: 'run.vineyard.plugins.favicon_hash',
         content_type: 'vineyard:plugin',
         name: 'Favicon Hash',
-        version: '1.2.1',
+        version: '1.2.2',
         description:
-            'Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan, Censys and Criminal IP search by), linked by "has favicon". Does not follow redirects. Desktop only.',
+            'Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan and Censys search by), linked by "has favicon". Does not follow redirects. Desktop only.',
         icon: 'image',
         author: { name: 'VINEYARD', url: 'https://vineyard.run' },
         license: 'Apache-2.0',
