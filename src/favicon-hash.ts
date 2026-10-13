@@ -100,8 +100,8 @@ export const faviconHash = definePlugin({
         license: 'Apache-2.0',
         platforms: {
             primary: 'desktop',
-            web: { runtime: 'sandbox-js', entry: 'inline' },
-            desktop: { runtime: 'sandbox-js', entry: 'inline', min_app_version: '0.4.15' },
+            web: { runtime: 'sandbox-js', entry: 'dist/pack.mjs' },
+            desktop: { runtime: 'sandbox-js', entry: 'dist/pack.mjs' },
         },
         io: {
             consumes: [
@@ -170,10 +170,10 @@ export const faviconHash = definePlugin({
                 continue;
             }
 
-            // An app from before bodyEncoding returns the bytes UTF-8-decoded, which cannot give the
-            // right hash; stop rather than store a wrong one.
+            // Bytes that were not returned base64-encoded have been UTF-8-decoded, which cannot give
+            // the right hash; stop rather than store a wrong one.
             if (res.bodyEncoding !== 'base64') {
-                throw new Error('Favicon Hash needs Vineyard desktop 0.4.15 or later — update the app.');
+                throw new Error('Favicon Hash: the probe did not return the body base64-encoded, so no hash can be computed.');
             }
             if (!res.body || res.truncated) {
                 failed++;

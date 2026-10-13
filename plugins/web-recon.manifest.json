@@ -18,15 +18,8 @@
     },
     "desktop": {
       "runtime": "sandbox-js",
-      "entry": "dist/pack.mjs",
-      "min_app_version": "0.1.0"
+      "entry": "dist/pack.mjs"
     }
-  },
-  "distribution": {
-    "kind": "git",
-    "repository": "https://github.com/Vineyard-Intelligence/pluginpack-web-recon",
-    "ref": "v1.2.2",
-    "path": "plugins/web-recon.manifest.json"
   },
   "plugins": [
     {
@@ -44,8 +37,7 @@
         },
         "desktop": {
           "runtime": "sandbox-js",
-          "entry": "dist/pack.mjs",
-          "min_app_version": "0.4.15"
+          "entry": "dist/pack.mjs"
         }
       },
       "io": {
@@ -98,8 +90,7 @@
         },
         "desktop": {
           "runtime": "sandbox-js",
-          "entry": "dist/pack.mjs",
-          "min_app_version": "0.4.15"
+          "entry": "dist/pack.mjs"
         }
       },
       "io": {
@@ -152,8 +143,7 @@
         },
         "desktop": {
           "runtime": "sandbox-js",
-          "entry": "dist/pack.mjs",
-          "min_app_version": "0.1.0"
+          "entry": "dist/pack.mjs"
         }
       },
       "io": {
