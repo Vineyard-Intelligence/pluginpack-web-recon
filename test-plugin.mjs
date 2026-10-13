@@ -61,7 +61,7 @@ function ctxWith(probeResponse, existing = []) {
 {
     const t = ctxWith({ status: 200, headers: {}, body: 'GIF89a', truncated: false });
     const err = await favicon.run(t.ctx).catch((e) => e);
-    check('an app without bodyEncoding is refused, not hashed wrongly', err instanceof Error && /0\.4\.15/.test(err.message));
+    check('a body without bodyEncoding is refused, not hashed wrongly', err instanceof Error && /base64/.test(err.message));
 }
 
 // ── HHHash: hhh:1: + SHA-256 of names as sent, repeats counted once ─────────────────────────
@@ -87,11 +87,11 @@ function ctxWith(probeResponse, existing = []) {
 {
     const t = ctxWith({ status: 200, headers: { date: 'x' }, body: '', truncated: false });
     const err = await hhhash.run(t.ctx).catch((e) => e);
-    check('an app without headerNames is refused', err instanceof Error && /0\.4\.15/.test(err.message));
+    check('a probe without headerNames is refused', err instanceof Error && /header names/.test(err.message));
 }
 
 // ── a re-run on a hash already in the graph: createNode again (the host merges it into the
-//    existing node), never updateNode — which used to throw without node:update.
+//    existing node), never updateNode, which throws without node:update.
 {
     const names = ['Date', 'Server'];
     const hash = 'hhh:1:' + 'x'.repeat(64);

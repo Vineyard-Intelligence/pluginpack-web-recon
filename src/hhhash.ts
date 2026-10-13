@@ -57,8 +57,8 @@ export const hhhash = definePlugin({
         license: 'Apache-2.0',
         platforms: {
             primary: 'desktop',
-            web: { runtime: 'sandbox-js', entry: 'inline' },
-            desktop: { runtime: 'sandbox-js', entry: 'inline', min_app_version: '0.4.15' },
+            web: { runtime: 'sandbox-js', entry: 'dist/pack.mjs' },
+            desktop: { runtime: 'sandbox-js', entry: 'dist/pack.mjs' },
         },
         io: {
             consumes: [
@@ -129,10 +129,10 @@ export const hhhash = definePlugin({
                 continue;
             }
 
-            // An app from before headerNames answers over HTTP/2 with lowercased names; that is not
-            // the HHHash, so stop rather than store a wrong one.
+            // Without the header names as sent (a probe that answered over HTTP/2 lowercases them)
+            // there is no HHHash, so stop rather than store a wrong one.
             if (!Array.isArray(res.headerNames)) {
-                throw new Error('HHHash needs Vineyard desktop 0.4.15 or later — update the app.');
+                throw new Error('HHHash: the probe returned no header names, so no hash can be computed.');
             }
             if (!res.headerNames.length) {
                 failed++;
