@@ -1,0 +1,51 @@
+{
+  "bmp-rgb-40x24.bmp": {
+    "phash": "dac68c938699c763",
+    "dhash": "6063676767676763"
+  },
+  "gif-16.gif": {},
+  "ico-bmp-tie.ico": {
+    "phash": "80caaaad565f654b",
+    "dhash": "6952a4c1daac344a"
+  },
+  "ico-bmp1-bw.ico": {
+    "phash": "d5f3f821d42681ad",
+    "dhash": "c4e5c8cbb6ec9bb6"
+  },
+  "ico-bmp32.ico": {
+    "phash": "a55a52cad29b931b",
+    "dhash": "6c9e9f9f9f9f9f9e"
+  },
+  "ico-png-frames.ico": {
+    "phash": "b8ad5334c91625eb",
+    "dhash": "030303030383c3e3"
+  },
+  "png-flat-1x1.png": {
+    "phash": "8000000000000000",
+    "dhash": "0000000000000000"
+  },
+  "png-gray2-interlaced-16.png": {
+    "phash": "9beeacd5068b885c",
+    "dhash": "18d7226dcb753562"
+  },
+  "png-mirror-32.png": {
+    "phash": "80a8aa0280a8222a",
+    "dhash": "333333b2e8cccccc"
+  },
+  "png-palette-short-31x17.png": {
+    "phash": "94e4cfe6b0cbb142",
+    "dhash": "9a9aaa224e9a69a2"
+  },
+  "png-rgb16-interlaced-100x37.png": {
+    "phash": "b21c7b13266eb1ca",
+    "dhash": "c5c3565248a64945"
+  },
+  "png-rgba-48.png": {
+    "phash": "eb3f90d0534aa8bc",
+    "dhash": "0101197dfefefefe"
+  },
+  "png-tall-13x200.png": {
+    "phash": "f18e0eff7161020f",
+    "dhash": "b9f9f90606160606"
+  }
+}
