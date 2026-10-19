@@ -2,9 +2,12 @@
 // Run: node test-plugin.mjs   (after `npm run build`)
 //
 // Expected values come from the reference implementations, not from this code:
-//   favicon  Python `mmh3.hash(codecs.encode(data, 'base64'))` — Shodan's http.favicon.hash
+//   favicon  Python `mmh3.hash(codecs.encode(data, 'base64'))` — Shodan's http.favicon.hash;
+//            MD5 and SHA-256 of the raw bytes from Node's crypto; pHash and dHash from Pillow and
+//            ImageHash, written into test-fixtures/favicons/expected.json by make-favicons.py
 //   HHHash   the `hhhash` package (buildhash); adca8a87… is the value its README publishes for
 //            www.misp-project.org, whose header names are listed below.
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import pack from './dist/pack.mjs';
 
@@ -57,6 +60,68 @@ function ctxWith(probeResponse, existing = []) {
     check('asks the probe for base64', t.calls[0]?.init?.bodyEncoding === 'base64');
     check('fetches /favicon.ico', t.calls[0]?.url === 'https://example.com/favicon.ico');
     check('hash equals Python mmh3 over encodebytes', t.created[0]?.data.hash_value === '-1874651529');
+    const raw = Buffer.from(body, 'base64');
+    check('md5 is of the raw bytes', t.created[0]?.data.md5 === createHash('md5').update(raw).digest('hex'));
+    check('sha256 is of the raw bytes', t.created[0]?.data.sha256 === createHash('sha256').update(raw).digest('hex'));
+    // Python format(-1874651529, 'x'): the form Criminal IP's favicon: filter takes.
+    check('mmh3_hex is the signed value in hex', t.created[0]?.data.mmh3_hex === '-6fbce989');
+}
+// pHash and dHash on reference icons, each as Pillow and ImageHash compute it (make-favicons.py).
+{
+    const dir = new URL('./test-fixtures/favicons/', import.meta.url);
+    const expected = JSON.parse(readFileSync(new URL('expected.json', dir), 'utf8'));
+    for (const [name, want] of Object.entries(expected)) {
+        const body = readFileSync(new URL(name, dir)).toString('base64');
+        const t = ctxWith({
+            status: 200,
+            headers: {},
+            body,
+            truncated: false,
+            bodyEncoding: 'base64',
+        });
+        const res = await favicon.run(t.ctx);
+        const got = t.created[0]?.data ?? {};
+        if (want.phash) {
+            check(`${name}: phash as ImageHash computes it`, got.phash === want.phash);
+            check(`${name}: dhash as VirusTotal packs it`, got.dhash === want.dhash);
+        } else {
+            check(`${name}: not decoded, so no perceptual hash`, !('phash' in got) && res.counts.no_image_hash === 1);
+        }
+    }
+}
+
+// A redirect is not followed, and the probe returns it without a body or bodyEncoding: it is a
+// skipped fetch, not a reason to stop hashing the rest of the selection.
+{
+    const body = Buffer.from([0, 1, 2, 3]).toString('base64');
+    const t = ctxWith({
+        status: 200,
+        headers: {},
+        body,
+        truncated: false,
+        bodyEncoding: 'base64',
+    });
+    t.ctx.input.selection = ['u1', 'u2'];
+    let n = 0;
+    t.ctx.net.probe = async () =>
+        n++ === 0
+            ? {
+                  status: 301,
+                  headers: {},
+                  body: '',
+                  truncated: false,
+                  redirectUrl: 'https://www.example.com/favicon.ico',
+              }
+            : {
+                  status: 200,
+                  headers: {},
+                  body,
+                  truncated: false,
+                  bodyEncoding: 'base64',
+              };
+    const res = await favicon.run(t.ctx).catch((e) => e);
+    check('a redirect is skipped and the next site is still hashed', !(res instanceof Error) && t.created.length === 1);
+    check('and counted as a failed fetch', res?.counts?.failed === 1);
 }
 {
     const t = ctxWith({ status: 200, headers: {}, body: 'GIF89a', truncated: false });

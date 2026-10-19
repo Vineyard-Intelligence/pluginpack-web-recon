@@ -2,8 +2,8 @@
   "identifier": "run.vineyard.pluginpacks.web_recon",
   "content_type": "vineyard:pluginpack",
   "name": "Web Recon",
-  "version": "1.2.3",
-  "description": "Fingerprints web pages: Shodan-style favicon hash, HHHash of the response header names, and a hash of the HTML tag structure. Desktop only.",
+  "version": "1.3.0",
+  "description": "Fingerprints web pages: favicon hashes in the forms Shodan, Censys and other search services index, HHHash of the response header names, and a hash of the HTML tag structure. Desktop only.",
   "author": {
     "name": "VINEYARD",
     "url": "https://vineyard.run"
@@ -26,8 +26,8 @@
       "identifier": "run.vineyard.plugins.favicon_hash",
       "content_type": "vineyard:plugin",
       "name": "Favicon Hash",
-      "version": "1.2.2",
-      "description": "Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node with its Shodan-style MMH3 hash (the value Shodan and Censys search by), linked by \"has favicon\". Does not follow redirects. Desktop only.",
+      "version": "1.3.0",
+      "description": "Fetches /favicon.ico from the host of each selected URL and creates a web.favicon_hash node linked by \"has favicon\". A favicon hash identifies the icon file a site serves, and each form a search service indexes is its own property. hash_value is the Shodan-style MurmurHash3 searched by Shodan http.favicon.hash, FOFA icon_hash, Censys favicons.hash_shodan and ZoomEye iconhash. mmh3_hex is that value in hex, searched by Criminal IP favicon:. md5 is searched by Censys favicons.hash_md5, ZoomEye iconhash, 360 Quake favicon, Hunter.how favicon_hash, ONYPHE app.favicon.imagemd5 and VirusTotal main_icon_md5. sha256 is searched by Censys favicons.hash_sha256, Netlas http.favicon.hash_sha256 and urlscan.io hash. phash and dhash are perceptual hashes of ICO, PNG and BMP icons, compared by how many of their 64 bits differ. phash is the ImageHash pHash. dhash follows VirusTotal main_icon_dhash, which VirusTotal searches by similarity. Does not follow redirects or read the page for a <link rel=\"icon\">. Desktop only.",
       "icon": "image",
       "platforms": {
         "primary": "desktop",
